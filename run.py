@@ -42,6 +42,7 @@ def main():
     (args.results / "experiment.json").write_text(json.dumps(metadata, indent=2) + "\n")
     writer = csv.writer(sys.stdout)
     writer.writerow(["repeat", "input_tokens", "request_rate", "completed", "failed", "p99_ttft_ms", "p99_tpot_ms", "goodput_req_s"])
+    trials = {}
     for index, (repeat, length, rate) in enumerate(
             trial_plan(args.input_tokens, args.rates, args.repeats, args.seed), start=1):
         filename = f"point-{index}.json"
@@ -58,7 +59,26 @@ def main():
         result = json.loads((args.results / filename).read_text())
         writer.writerow([repeat, length, rate, result["completed"], result["failed"], result["p99_ttft_ms"],
                          result["p99_tpot_ms"], result["request_goodput"]])
+        passed = (result["completed"] == args.prompts and result["failed"] == 0
+                  and result["p99_ttft_ms"] <= args.ttft_ms and result["p99_tpot_ms"] <= args.tpot_ms)
+        trials.setdefault((length, rate), []).append((passed, result["request_goodput"]))
         sys.stdout.flush()
+
+    lines = ["# Inference capacity experiment", "",
+             f"Model: {args.model}. Each passing trial completed all {args.prompts} requests "
+             f"with p99 first-token latency ≤ {args.ttft_ms} ms and p99 time per output token ≤ {args.tpot_ms} ms.", "",
+             "| Input tokens | Offered req/s | Passing trials | Goodput range (req/s) |",
+             "|---:|---:|---:|---:|"]
+    for (length, rate), points in sorted(trials.items()):
+        goodput = [value for _, value in points]
+        successes = sum(passed for passed, _ in points)
+        lines.append(f"| {length} | {rate:g} | {successes}/{len(points)} | {min(goodput):.2f}–{max(goodput):.2f} |")
+    for length in sorted(set(args.input_tokens)):
+        passing = [rate for (tokens, rate), points in trials.items()
+                   if tokens == length and all(passed for passed, _ in points)]
+        bound = f"{max(passing):g} req/s" if passing else "no passing rate"
+        lines.append(f"\nFor {length} input tokens, the highest tested offered rate passing every repeat was **{bound}**.")
+    (args.results / "capacity.md").write_text("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":
