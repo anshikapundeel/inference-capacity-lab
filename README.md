@@ -13,3 +13,7 @@ The runner randomizes trial order reproducibly and repeats each point three time
 Goodput is the number of requests per second that meet both configured latency objectives. Compare it against offered rate and review failed requests and the spread across repeats at each point. For comparable trials, hold model, hardware, server configuration and output length fixed, control prefix caching, and repeat with fresh run directories. Report actual hardware and server settings alongside any results. This repository ships no measured GPU results.
 
 After every planned point finishes, capacity.md lists the passing repeats, observed goodput range and highest tested rate meeting both p99 thresholds in every repeat with all requests completed. The numbers apply to the tested grid and hardware.
+
+## Run the case study on a GPU runner
+
+The manual Inference capacity case study workflow uses a Linux NVIDIA runner labeled gpu and vllm-lab. Start the model server on that runner at port 8000 before dispatch and enter its served model ID. The job records GPU model, memory, driver and vLLM client version alongside the raw outputs. Keep the server version, startup flags and cache configuration with the experiment when sharing results.

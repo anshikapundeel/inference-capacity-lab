@@ -1,0 +1,32 @@
+name: Inference capacity case study
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model ID served by vLLM on this runner
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: [self-hosted, linux, gpu, vllm-lab]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Benchmark local model server
+        env:
+          MODEL_ID: ${{ inputs.model }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/capacity"
+          output=$(mktemp -d "$RUNNER_TEMP/capacity/trial.XXXXXX")
+          echo "RESULT_DIR=$output" >> "$GITHUB_ENV"
+          nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv > "$output/hardware.csv"
+          python3 -c 'from importlib.metadata import version; print(version("vllm"))' > "$output/vllm-version.txt"
+          python3 run.py --model "$MODEL_ID" --results "$output/run" > "$output/trials.csv"
+          cat "$output/run/capacity.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inference-capacity-measurements
+          path: ${{ env.RESULT_DIR }}/
